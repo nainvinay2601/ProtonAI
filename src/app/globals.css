@@ -120,3 +120,29 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+/* globals.css */
+.font-geist {
+  font-family: var(--font-geist-sans);
+}
+
+.font-mono {
+  font-family: var(--font-geist-mono);
+}
+
+/* Or set defaults */
+body {
+  font-family: var(--font-geist-mono);
+  color: #ffe2fe;
+  background-color: #080708;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-geist-sans);
+}

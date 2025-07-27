@@ -1,0 +1,227 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================
+// USER MANAGEMENT
+// ===========================
+
+
+model User {
+  id  String @id // Clerk User id 
+  email  String  @unique
+  firstName String? 
+  lastName String?
+  imageUrl String?
+  preferredIndustry String? // For personalised suggestions 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations 
+  resumes Resume[]
+  analyses  Analysis[]
+  savedJobs SavedJob[]
+
+  @@map("users")
+
+}
+
+// ===========================
+// RESUME MANAGEMENT
+// ===========================
+
+model Resume {
+  id String @id @default(cuid())
+  fileName String //example_resume.pdf
+  originalName String // the name of the file user will upload 
+  fileUrl String // Cloud Storage URl 
+  fileSize Int // in bytes 
+  mimeType  String  @default("application/pdf")
+
+  //===== EXTRACTED CONTENT =============
+  extractedText  String?  // Raw text from the pdf that we will take 
+  skills  String[] //Auto extracted skills from the resume 
+  experienceYrs  Int? // calculated total years of experience of the user 
+  education String? // parsed education info 
+  certifications String[] // Any certification found in the resume parsed data
+
+  //  ==== META DATA ======
+  uploadedAt DateTime @default(now())
+  lastAnalyzed DateTime? // when was the last analysis was done 
+  isActive Boolean @default(true)  
+
+  // ===   RELATIONS ===
+
+  userId String 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade) // basically in the user model use our primary key as foreign which is UserId  and refer to id in the user model 
+  analyses  Analysis[]
+
+  // === Performance Indexes 
+  @@index([userId, uploadedAt]) // helps in the searching part and sorting 
+  @@index([isActive]) // same the search part  find all the active user 
+  @@map("resumes")
+
+}
+
+// ===========================
+// JOB DESCRIPTIONS 
+// ===========================
+
+
+model JobDescription {
+  id String @id @default(cuid())
+  title String  // "Example role "
+  company String? 
+  description String //Full job description text 
+  requirements String? // Extracted requirements section 
+
+
+  //JOB METADATA 
+  location String? //remote, local, NYC, India, Hybrid
+  experienceLevel String? // entry , mid , senior
+  industry String? // tech, finance, marketing
+  salaryMin Int? // min salary in USD
+  salaryMax Int? //max salary
+  employmentType String? //Full time, internship, contract 
+
+  //AUTO EXTRACTED FOR BETTER MATCHING 
+  requiredSkills String[] // React, 5+ YOE, team leadership 
+  preferredSkills String[] // "GraphQL", "typescript"
+  benefits String[]
+
+  //Tracking 
+  createdAt DateTime @default(now())
+  source String? //"LINKEDIN", INDEED
+  sourceUrl String? 
+  isActive Boolean @default(true)
+
+  //Relations
+  analyses Analysis[]
+  savedJobs SavedJob[] //user can save the interesting jobs 
+
+   // Performance indexes
+  @@index([industry, experienceLevel])
+  @@index([isActive, createdAt])
+  @@map("job_descriptions")
+ }
+
+// ============================================
+// ATS ANALYSIS RESULTS
+// ============================================
+
+model Analysis {
+  id String @id  @default(cuid())
+  //Core analysis result 
+  atsScore  Int  // 0-100 overall match with the job 
+  keywordMatch  Float //0.0-1.0  keyword matching ration 
+  experienceMatch String  // "under-qualified" , "Good match" , "over-qualified"
+
+  //Detailed breakdown 
+  missingKeywords String[] 
+  matchedSkills String[]
+  weakAreas String[]
+  strengths String[]
+
+  //AI Generated Feedback 
+  suggestions String //JSON String: detailed improvement suggestions 
+  summary String?  //Brief overview of the analysis 
+  recommendedChanges String?  //specific actionable items 
+
+  //Performance Tracking 
+  analysisTimeMs  Int?  //Processing time in milliseconds 
+  aiModel String? //gpt-4 
+  status String @default("completed") //"processing", "failed"
+  errorMessage String? //If analysis failed
+
+  //Timestamps 
+  createdAt DateTime @default(now())
+
+  //Relations 
+  userId  String 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  resumeId  String 
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  jobDescriptionId String 
+  jobDescription JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+
+  //Performance Indexes
+  @@index([userId, createdAt])
+  @@index([atsScore])
+  @@index([status])
+  @@map("analyses")
+}
+
+
+// ============================================
+// USER SAVED JOBS (Optional)
+// ============================================
+
+model SavedJob {
+  id String  @id @default(cuid())
+  userId  String 
+  jobDescriptionId String 
+  notes String? 
+  status String @default("interested")
+  appliedAt DateTime? //When they applied 
+  createdAt  DateTime @default(now())
+
+  //Relations 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobDescription JobDescription @relation(fields: [jobDescriptionId], references: [id], onDelete: Cascade)
+
+  //Prevent duplicate saves 
+  @@unique([userId, jobDescriptionId])
+  @@map("saved_jobs")
+
+}
+
+
+// ============================================
+// SKILLS DATABASE (For better matching)
+// ============================================
+
+model Skill {
+  id String @id @default(cuid())
+  name String @unique //React.js 
+  category String //Frontend , backend etx ec
+  subcategory String?  // JS, Datbase etc 
+  importance Int @default(3) // 1-5 on how valuable this skill is 
+  aliases  String[] // ["React", "React.Js", "ReactJS"]
+
+
+  //Metadata 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@map("skills")
+}
+
+// ============================================
+// SYSTEM ANALYTICS (Optional)
+// ============================================
+
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  userId    String?  // Nullable for anonymous events
+  event     String   // "resume_uploaded", "analysis_completed", "job_saved"
+  metadata  String?  // JSON string with additional data
+  createdAt DateTime @default(now())
+  
+  @@index([event, createdAt])
+  @@map("analytics_events")
+}
