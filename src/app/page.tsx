@@ -1,7 +1,9 @@
+import UploadComponent from "@/components/UploadComponent/UploadComponent";
+
 export default function Home() {
   return (
     <>
-      <h1>Hello Friend</h1>
+      <UploadComponent/>
     </>
   );
 }
